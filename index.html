@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mdHandler</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='21' font-size='12' font-family='Arial' font-weight='700' text-anchor='middle' fill='white'>MD</text></svg>" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">md<span>Handler</span></div>
+
+      <div class="toolbar" role="toolbar" aria-label="파일과 보기">
+        <div class="group">
+          <button data-action="new" title="새 문서 (Alt+N)">새 문서</button>
+          <button data-action="open" title="열기 (Ctrl+O)">열기</button>
+          <button data-action="save" title="저장 (Ctrl+S)">저장</button>
+          <button data-action="save-as" title="다른 이름으로 저장 (Ctrl+Shift+S)">다른 이름</button>
+        </div>
+        <div class="group">
+          <button data-action="export-html" title="렌더링 결과를 HTML 파일로">HTML 내보내기</button>
+          <button data-action="print" title="인쇄 / PDF로 저장 (Ctrl+P)">인쇄·PDF</button>
+          <button data-action="copy-html" title="렌더링된 HTML을 클립보드로">HTML 복사</button>
+        </div>
+        <div class="group">
+          <button data-action="undo" title="실행 취소 (Ctrl+Z)">↶</button>
+          <button data-action="redo" title="다시 실행 (Ctrl+Shift+Z)">↷</button>
+          <button data-action="find" title="찾기 · 바꾸기 (Ctrl+F)">찾기</button>
+        </div>
+        <div class="group seg" role="radiogroup" aria-label="보기 방식">
+          <button data-view="editor" role="radio" title="편집기만 (Ctrl+Alt+1)">편집</button>
+          <button data-view="split" role="radio" title="나란히 보기 (Ctrl+Alt+2)">분할</button>
+          <button data-view="preview" role="radio" title="미리보기만 (Ctrl+Alt+3)">미리보기</button>
+        </div>
+        <div class="group">
+          <button data-action="toggle-outline" title="목차 패널 (Ctrl+Alt+O)">목차</button>
+          <button data-action="toggle-sync" title="편집기와 미리보기 스크롤 맞추기" aria-pressed="true">스크롤 동기화</button>
+          <button data-action="settings" title="편집기 설정">설정</button>
+          <button data-action="theme" title="테마 (자동 → 밝게 → 어둡게)">테마</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="formatbar" role="toolbar" aria-label="서식">
+      <button data-format="heading" title="제목 단계 바꾸기 (Ctrl+H)">H</button>
+      <button data-format="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
+      <button data-format="italic" title="기울임 (Ctrl+I)"><i>I</i></button>
+      <button data-format="strike" title="취소선 (Ctrl+Shift+X)"><s>S</s></button>
+      <button data-format="code" title="인라인 코드 (Ctrl+E)">`코드`</button>
+      <span class="sep"></span>
+      <button data-format="quote" title="인용 (Ctrl+Shift+.)">인용</button>
+      <button data-format="ul" title="글머리 목록 (Ctrl+Shift+8)">• 목록</button>
+      <button data-format="ol" title="번호 목록 (Ctrl+Shift+7)">1. 목록</button>
+      <button data-format="task" title="체크리스트 (Ctrl+Shift+9)">☑ 할 일</button>
+      <span class="sep"></span>
+      <button data-format="link" title="링크 (Ctrl+K)">링크</button>
+      <button data-format="image" title="이미지 (붙여넣기·끌어다 놓기도 됩니다)">이미지</button>
+      <button data-format="table" title="표 삽입">표</button>
+      <button data-format="format-table" title="커서가 있는 표의 열 맞추기 (Ctrl+Alt+T)">표 정리</button>
+      <button data-format="codeblock" title="코드 블록">코드 블록</button>
+      <button data-format="math" title="수식 블록 (KaTeX)">수식</button>
+      <button data-format="mermaid" title="Mermaid 다이어그램">다이어그램</button>
+      <button data-format="hr" title="구분선">구분선</button>
+    </div>
+
+    <main class="layout" id="layout" data-view="split">
+      <aside class="outline" id="outline-panel">
+        <div class="panel-head">
+          <span>목차</span>
+          <span class="hint" id="outline-count"></span>
+        </div>
+        <nav id="outline" class="outline-list" aria-label="문서 목차"></nav>
+        <section class="doc-info">
+          <h2>문서 정보</h2>
+          <dl id="doc-info" class="info"></dl>
+        </section>
+      </aside>
+
+      <section class="pane editor-pane" id="editor-pane" aria-label="마크다운 편집기">
+        <div class="pane-head">
+          <span id="file-name">untitled.md</span>
+          <span id="dirty" class="dot" title="저장되지 않은 변경" hidden></span>
+        </div>
+        <div id="editor" class="editor-host"></div>
+        <div class="dropzone" id="dropzone" hidden>
+          <div>Markdown 파일을 놓으면 열고, 이미지를 놓으면 커서 위치에 넣습니다</div>
+        </div>
+      </section>
+
+      <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="편집기·미리보기 폭 조절" tabindex="0"></div>
+
+      <section class="pane preview-pane" id="preview-pane" aria-label="미리보기">
+        <div class="pane-head"><span>미리보기</span><span class="hint" id="render-time"></span></div>
+        <div class="preview-scroll" id="preview-scroll">
+          <article id="preview" class="markdown-body"></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <span id="status">준비</span>
+      <span class="status-right">
+        <span id="cursor-pos"></span>
+        <span id="stats"></span>
+        <span id="autosave" class="muted"></span>
+      </span>
+    </footer>
+
+    <input id="file-open" type="file" accept=".md,.markdown,.mdx,.mdown,.mkd,.txt,text/markdown,text/plain" hidden />
+    <input id="file-image" type="file" accept="image/*" hidden />
+
+    <dialog id="dialog">
+      <form method="dialog" id="dialog-form">
+        <h3 id="dialog-title"></h3>
+        <div id="dialog-body"></div>
+        <menu>
+          <button value="ok" class="primary" id="dialog-ok">확인</button>
+          <button value="cancel" formnovalidate>취소</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
