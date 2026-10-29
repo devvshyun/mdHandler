@@ -98,7 +98,7 @@ const preview = new Preview({
   scroller: previewScroll,
   isDark: () => document.documentElement.dataset.resolvedTheme === 'dark',
   onToggleTask: (line, checked) =>
-    editor.replaceLine(line, (text) => text.replace(/^(\s*(?:>\s*)*[-*+]\s+)\[[ xX]\]/, `$1[${checked ? 'x' : ' '}]`)),
+    editor.replaceLine(line, (text) => text.replace(/^(\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+)\[[ xX]\]/, `$1[${checked ? 'x' : ' '}]`)),
 });
 
 const editor: Editor = new Editor({

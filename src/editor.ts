@@ -72,6 +72,17 @@ const phrases = EditorState.phrases.of({
   go: '이동',
 });
 
+/**
+ * True when the marker run just before `from` is this marker, not a longer one: italic (`*`) inside
+ * `**bold**` sees a run of 2 and must add its own `*` instead of eating one of bold's.
+ * A run of 3 (`***both***`) holds both bold and italic.
+ */
+function ownsRun(doc: string, from: number, marker: string): boolean {
+  let run = 0;
+  while (from - run - 1 >= 0 && doc[from - run - 1] === marker[0]) run++;
+  return run === marker.length || run === 3;
+}
+
 export interface EditorOptions {
   parent: HTMLElement;
   doc: string;
@@ -113,7 +124,8 @@ export class Editor {
         scroll: () => opts.onScroll(),
         paste: (e, view) => {
           const files = [...(e.clipboardData?.files ?? [])];
-          if (!files.length) return false;
+          // Office apps put a picture of the selection next to its text; the text is what's wanted.
+          if (!files.length || e.clipboardData?.getData('text/plain')) return false;
           if (opts.onPasteFiles(files, view.state.selection.main.head)) e.preventDefault();
           return true;
         },
@@ -225,7 +237,7 @@ export class Editor {
       s.changeByRange((range) => {
         const text = s.sliceDoc(range.from, range.to);
         const outer = s.sliceDoc(range.from - before.length, range.to + after.length);
-        if (outer.startsWith(before) && outer.endsWith(after) && range.from >= before.length) {
+        if (outer.startsWith(before) && outer.endsWith(after) && range.from >= before.length && ownsRun(s.doc.toString(), range.from, before)) {
           return {
             changes: [
               { from: range.from - before.length, to: range.from, insert: '' },
@@ -234,7 +246,8 @@ export class Editor {
             range: EditorSelection.range(range.from - before.length, range.to - before.length),
           };
         }
-        if (text.length > before.length + after.length && text.startsWith(before) && text.endsWith(after)) {
+        const lead = text.length - text.replace(new RegExp(`^\\${before[0]}+`), '').length;
+        if (text.length > before.length + after.length && text.startsWith(before) && text.endsWith(after) && (lead === before.length || lead === 3)) {
           const inner = text.slice(before.length, text.length - after.length);
           return { changes: { from: range.from, to: range.to, insert: inner }, range: EditorSelection.range(range.from, range.from + inner.length) };
         }
@@ -267,10 +280,12 @@ export class Editor {
 
   /** Toggles a line prefix such as "> " or "- ". */
   togglePrefix(prefix: string | ((i: number) => string), pattern: RegExp): void {
-    this.mapLines((text, i, all) => {
+    let item = 0;
+    this.mapLines((text, _i, all) => {
       const allHave = all.every((l) => pattern.test(l) || !l.trim());
       if (allHave) return text.replace(pattern, '');
-      const p = typeof prefix === 'string' ? prefix : prefix(i);
+      if (!text.trim()) return text;
+      const p = typeof prefix === 'string' ? prefix : prefix(item++);
       const bare = text.replace(/^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, '$1');
       return text.trim() ? bare.replace(/^(\s*)/, `$1${p}`) : text;
     });

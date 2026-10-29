@@ -70,6 +70,12 @@ export class Preview {
       html = `<table class="front-matter" data-line="0"><tbody>${rows}</tbody></table>${html}`;
     }
     root.innerHTML = html;
+    // DOMPurify drops ids that match document properties ("title", "links", "images"...); heading ids
+    // cannot clobber anything, so put them back.
+    for (const h of out.headings) {
+      const el = root.querySelector(`:is(h1, h2, h3, h4, h5, h6)[data-line="${h.line}"]`);
+      if (el && !el.id) el.id = h.id;
+    }
     root.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach((box) => box.removeAttribute('disabled'));
     if (out.hasMermaid) await this.renderDiagrams(seq);
     this.measure();
