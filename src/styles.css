@@ -226,17 +226,18 @@ button.primary {
 
 /* ---- layout ----------------------------------------------------------- */
 .layout {
-  --split: 50%;
   display: flex;
   min-height: 0;
   overflow: hidden;
 }
 
 .outline {
-  flex: 0 0 240px;
+  flex: 0 0 var(--outline-width, 240px);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
@@ -314,7 +315,7 @@ button.primary {
 
 .info {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 3px 10px;
   margin: 0;
   font-size: 12px;
@@ -341,20 +342,22 @@ button.primary {
   background: var(--surface);
 }
 
+/* Grow factors, not percentages: the ratio then applies to the space left after the outline and splitters. */
 .editor-pane {
-  flex: 0 0 var(--split);
+  flex: var(--editor-grow, 1) 1 0;
 }
 
 .preview-pane {
-  flex: 1 1 0;
+  flex: var(--preview-grow, 1) 1 0;
 }
 
 .layout[data-view='editor'] .editor-pane {
   flex: 1 1 0;
 }
 
-.layout[data-view='editor'] :is(.preview-pane, .splitter),
-.layout[data-view='preview'] :is(.editor-pane, .splitter) {
+.layout[data-view='editor'] :is(.preview-pane, #splitter),
+.layout[data-view='preview'] :is(.editor-pane, #splitter),
+.outline[hidden] + .outline-splitter {
   display: none;
 }
 

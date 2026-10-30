@@ -21,6 +21,7 @@ interface Settings {
   view: View;
   split: number;
   outline: boolean;
+  outlineWidth: number;
   sync: boolean;
   theme: Theme;
   wrap: boolean;
@@ -37,6 +38,7 @@ const defaults: Settings = {
   view: 'split',
   split: 50,
   outline: window.innerWidth >= 1100,
+  outlineWidth: 240,
   sync: true,
   theme: 'auto',
   wrap: true,
@@ -222,7 +224,7 @@ function renderOutline(list: Heading[]): void {
     a.textContent = h.text || '(빈 제목)';
     a.className = `lvl-${h.level - min + 1}`;
     a.dataset.line = String(h.line);
-    a.title = `${h.line + 1}번째 줄`;
+    a.title = `${a.textContent} (${h.line + 1}번째 줄)`;
     a.addEventListener('click', (e) => {
       e.preventDefault();
       jumpToHeading(h);
@@ -515,7 +517,7 @@ const layout = $('#layout');
 
 function applyView(): void {
   layout.dataset.view = settings.view;
-  layout.style.setProperty('--split', `${settings.split}%`);
+  applySplit();
   $('#outline-panel').hidden = !settings.outline;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     const on = b.dataset.view === settings.view;
@@ -589,42 +591,80 @@ async function openSettings(): Promise<void> {
   applyEditorSettings();
 }
 
-// Splitter: drag or arrow keys.
-const splitter = $('#splitter');
-splitter.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  splitter.setPointerCapture(e.pointerId);
-  layout.classList.add('resizing');
-  const panes = [$('#editor-pane'), $('#preview-pane')];
-  const left = panes[0].getBoundingClientRect().left;
-  const width = panes[1].getBoundingClientRect().right - left;
-  const move = (ev: PointerEvent) => {
-    settings.split = Math.min(85, Math.max(15, ((ev.clientX - left) / width) * 100));
-    layout.style.setProperty('--split', `${settings.split}%`);
-  };
-  const up = () => {
-    splitter.removeEventListener('pointermove', move);
-    layout.classList.remove('resizing');
+const OUTLINE_MIN = 160;
+const OUTLINE_DEFAULT = 240;
+const outlineMax = () => Math.max(OUTLINE_MIN, Math.min(520, window.innerWidth * 0.4));
+const clampSplit = (n: number) => Math.min(85, Math.max(15, n));
+const clampOutline = (n: number) => Math.round(Math.min(outlineMax(), Math.max(OUTLINE_MIN, n)));
+
+function applySplit(): void {
+  layout.style.setProperty('--editor-grow', String(settings.split));
+  layout.style.setProperty('--preview-grow', String(100 - settings.split));
+  layout.style.setProperty('--outline-width', `${clampOutline(settings.outlineWidth)}px`);
+}
+
+/**
+ * Wires a splitter: drag (pointer capture), arrow keys, double-click to reset.
+ * `drag` gets the pointer x and applies the new size; `nudge` handles ±1 arrow steps.
+ */
+function wireSplitter(el: HTMLElement, begin: () => (x: number) => void, nudge: (dir: number) => void, reset: () => void): void {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    layout.classList.add('resizing');
+    const drag = begin();
+    const move = (ev: PointerEvent) => {
+      drag(ev.clientX);
+      applySplit();
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      layout.classList.remove('resizing');
+      saveSettings();
+      editor.view.requestMeasure();
+      preview.measure();
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up, { once: true });
+    el.addEventListener('pointercancel', up, { once: true });
+  });
+  el.addEventListener('dblclick', () => {
+    reset();
     saveSettings();
-    preview.measure();
-  };
-  splitter.addEventListener('pointermove', move);
-  splitter.addEventListener('pointerup', up, { once: true });
-  splitter.addEventListener('pointercancel', up, { once: true });
-});
-splitter.addEventListener('dblclick', () => {
-  settings.split = 50;
-  saveSettings();
-  applyView();
-});
-splitter.addEventListener('keydown', (e) => {
-  const step = e.key === 'ArrowLeft' ? -2 : e.key === 'ArrowRight' ? 2 : 0;
-  if (!step) return;
-  e.preventDefault();
-  settings.split = Math.min(85, Math.max(15, settings.split + step));
-  saveSettings();
-  applyView();
-});
+    applyView();
+  });
+  el.addEventListener('keydown', (e) => {
+    const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    nudge(dir);
+    saveSettings();
+    applyView();
+  });
+}
+
+// Editor | preview.
+wireSplitter(
+  $('#splitter'),
+  () => {
+    const left = $('#editor-pane').getBoundingClientRect().left;
+    const width = $('#preview-pane').getBoundingClientRect().right - left;
+    return (x) => (settings.split = clampSplit(((x - left) / width) * 100));
+  },
+  (dir) => (settings.split = clampSplit(settings.split + dir * 2)),
+  () => (settings.split = 50),
+);
+
+// Outline | editor.
+wireSplitter(
+  $('#outline-splitter'),
+  () => {
+    const left = $('#outline-panel').getBoundingClientRect().left;
+    return (x) => (settings.outlineWidth = clampOutline(x - left));
+  },
+  (dir) => (settings.outlineWidth = clampOutline(settings.outlineWidth + dir * 16)),
+  () => (settings.outlineWidth = OUTLINE_DEFAULT),
+);
 
 // ---------------------------------------------------------------------------
 // Wiring
