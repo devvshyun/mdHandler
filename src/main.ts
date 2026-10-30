@@ -2,6 +2,7 @@ import 'katex/dist/katex.min.css';
 import './styles.css';
 import './preview.css';
 import { Editor } from './editor';
+import { openLightbox } from './lightbox';
 import { documentTitle, standaloneHtml } from './export';
 import { MD_EXT, pickMarkdown, readDropped, saveMarkdown, type FileHandle } from './files';
 import { Preview } from './preview';
@@ -22,6 +23,8 @@ interface Settings {
   split: number;
   outline: boolean;
   outlineWidth: number;
+  /** Preview text scale (1 = 16px body text). */
+  previewZoom: number;
   sync: boolean;
   theme: Theme;
   wrap: boolean;
@@ -39,6 +42,7 @@ const defaults: Settings = {
   split: 50,
   outline: window.innerWidth >= 1100,
   outlineWidth: 240,
+  previewZoom: 1,
   sync: true,
   theme: 'auto',
   wrap: true,
@@ -667,6 +671,99 @@ wireSplitter(
 );
 
 // ---------------------------------------------------------------------------
+// Preview zoom, full screen, diagram viewer
+// ---------------------------------------------------------------------------
+
+const ZOOM_STEPS = [0.75, 0.85, 1, 1.15, 1.3, 1.5, 1.75, 2, 2.5];
+
+function applyPreviewZoom(): void {
+  previewScroll.style.setProperty('--preview-zoom', String(settings.previewZoom));
+  $('#preview-zoom').textContent = `${Math.round(settings.previewZoom * 100)}%`;
+}
+
+function stepPreviewZoom(dir: number): void {
+  // Keep the reader's place: the same source line stays at the top.
+  const line = preview.lineForTop(previewScroll.scrollTop, editor.view.state.doc.lines);
+  const cur = settings.previewZoom;
+  const next =
+    dir === 0
+      ? 1
+      : dir > 0
+        ? (ZOOM_STEPS.find((z) => z > cur + 0.001) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1])
+        : ([...ZOOM_STEPS].reverse().find((z) => z < cur - 0.001) ?? ZOOM_STEPS[0]);
+  if (next === cur) return;
+  settings.previewZoom = next;
+  saveSettings();
+  applyPreviewZoom();
+  preview.measure();
+  suppress = { pane: 'preview', until: performance.now() + 100 };
+  previewScroll.scrollTop = preview.topForLine(line, editor.view.state.doc.lines);
+}
+
+previewScroll.addEventListener(
+  'wheel',
+  (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    // Ctrl+wheel zooms the preview text instead of the whole page.
+    e.preventDefault();
+    stepPreviewZoom(e.deltaY < 0 ? 1 : -1);
+  },
+  { passive: false },
+);
+
+const previewPane = $('#preview-pane');
+const canFullscreen = () => !!document.fullscreenEnabled && !!previewPane.requestFullscreen;
+
+function isPreviewFullscreen(): boolean {
+  return document.fullscreenElement === previewPane || previewPane.classList.contains('pseudo-fullscreen');
+}
+
+async function togglePreviewFullscreen(): Promise<void> {
+  if (isPreviewFullscreen()) {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    previewPane.classList.remove('pseudo-fullscreen');
+  } else if (canFullscreen()) {
+    try {
+      await previewPane.requestFullscreen();
+    } catch {
+      previewPane.classList.add('pseudo-fullscreen');
+    }
+  } else {
+    // iPhone Safari and sandboxed frames: fill the window instead.
+    previewPane.classList.add('pseudo-fullscreen');
+  }
+  updateFullscreenButton();
+}
+
+function updateFullscreenButton(): void {
+  const on = isPreviewFullscreen();
+  const btn = $('#fullscreen-btn');
+  btn.textContent = on ? '전체 화면 끝' : '전체 화면';
+  btn.classList.toggle('active', on);
+  requestAnimationFrame(() => preview.measure());
+}
+
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+
+/** Nearest heading above a preview element, for the viewer's title. */
+function headingAbove(el: Element): string {
+  const line = Number(el.closest<HTMLElement>('[data-line]')?.dataset.line ?? 0);
+  let title = '';
+  for (const h of headings) if (h.line <= line) title = h.text;
+  return title;
+}
+
+$('#preview').addEventListener('click', (e) => {
+  const t = e.target as Element;
+  if (t.closest('a')) return;
+  const target = t.closest('.mermaid-diagram') ?? (t instanceof HTMLImageElement ? t : null);
+  if (!target) return;
+  const kind = target instanceof HTMLImageElement ? target.alt || '이미지' : '다이어그램';
+  const above = headingAbove(target);
+  openLightbox(target, above ? `${above} · ${kind}` : kind);
+});
+
+// ---------------------------------------------------------------------------
 // Wiring
 // ---------------------------------------------------------------------------
 
@@ -696,6 +793,10 @@ const actions: Record<string, () => unknown> = {
     if (settings.sync) syncFrom('editor', true);
   },
   settings: openSettings,
+  'preview-zoom-in': () => stepPreviewZoom(1),
+  'preview-zoom-out': () => stepPreviewZoom(-1),
+  'preview-zoom-reset': () => stepPreviewZoom(0),
+  'preview-fullscreen': togglePreviewFullscreen,
   theme: () => {
     settings.theme = settings.theme === 'auto' ? 'light' : settings.theme === 'light' ? 'dark' : 'auto';
     saveSettings();
@@ -716,6 +817,10 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('dialog')) return;
+  if (e.key === 'Escape' && isPreviewFullscreen()) {
+    void togglePreviewFullscreen();
+    return;
+  }
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
   if (mod && !e.altKey && key === 's') {
@@ -780,6 +885,7 @@ $('#editor').addEventListener(
 applyTheme();
 applyView();
 applyEditorSettings();
+applyPreviewZoom();
 updateDirty();
 scheduleRender(0);
 if (draft) {

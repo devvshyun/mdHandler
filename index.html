@@ -92,7 +92,15 @@
       <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="편집기·미리보기 폭 조절" tabindex="0"></div>
 
       <section class="pane preview-pane" id="preview-pane" aria-label="미리보기">
-        <div class="pane-head"><span>미리보기</span><span class="hint" id="render-time"></span></div>
+        <div class="pane-head">
+          <span>미리보기 <span class="hint" id="render-time"></span></span>
+          <span class="pane-tools">
+            <button data-action="preview-zoom-out" title="글자 작게 (Ctrl+휠)">－</button>
+            <button data-action="preview-zoom-reset" id="preview-zoom" title="100%로">100%</button>
+            <button data-action="preview-zoom-in" title="글자 크게 (Ctrl+휠)">＋</button>
+            <button data-action="preview-fullscreen" id="fullscreen-btn" title="미리보기 전체 화면 (F11 대신, Esc로 나가기)">전체 화면</button>
+          </span>
+        </div>
         <div class="preview-scroll" id="preview-scroll">
           <article id="preview" class="markdown-body"></article>
         </div>
